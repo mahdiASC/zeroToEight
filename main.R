@@ -8,6 +8,9 @@ myColNames<-c('name','applicationTotalScore','cohort','address1','address2','zip
 keepData <- rawData[,keeps]
 colnames(keepData)<-myColNames
 
+rm(rawData)
+gc(verbose = FALSE)
+
 ###################
 ###CLEANING DATA###
 ###################
@@ -18,10 +21,41 @@ uniqueVals<-apply(keepData,2, function(x) unique(x))
 #Change ibrahim #33 in descending order to "Junior" under $year
 keepData$year[33]<-"Junior"
 
-#address and Paddress corrections
+#address zipcode corrections
+correctZip<-function(input){
+  input<-as.character(input)
+  if(nchar(input)!=5){
+    return (paste("0",input, sep=""))
+  }else{
+    return (input)
+  }
+}
+keepData$zipcode<-sapply(keepData$zipcode,correctZip)
+keepData$Pzipcode<-sapply(keepData$Pzipcode,correctZip)
 
-#Zipcodes need corrections
-#Cyril suggest Attendance sheets for each cohort
+correctAddress<-function(input){
+  output<-tolower(as.character(input))
+  #zicode is for Queens
+  if (output=="11693"){
+    output <- "Queens"   
+  }else if(grepl("new york",output)){
+    output <- "New York City"
+  }else if(grepl("brook",output)){
+    output <- "Brooklyn"
+  }else if(grepl("bronx",output)){
+    output <- "The Bronx"
+  }
+  
+  simpleCap <- function(x) {
+    s <- strsplit(x, " ")[[1]]
+    paste(toupper(substring(s, 1, 1)), tolower(substring(s, 2)),
+          sep = "", collapse = " ")
+  }
+  
+  return (simpleCap(output))
+}
+keepData$address1<-sapply(keepData$address1, correctAddress)
+keepData$Paddress1<-sapply(keepData$Paddress1, correctAddress)
 
 #Standardize DoB
 convertDate<-function(input){
@@ -32,13 +66,17 @@ convertDate<-function(input){
   }else{
     return (as.character(as.Date(input,format='%m/%d/%Y')))
   }
-  
 }
 
-keepData$DoB<-sapply(keepData$DoB, 1,convertDate)
+keepData$DoB<-sapply(keepData$DoB,convertDate)
 
 #Standardize GPAs (pretty much impossible)
 
+cleanNums<-function(input){
+  
+}
+
+x<-sapply(keepData$GPA,cleanNums)
 #Standardizing Race
 convertRace<-function(input){
   input<-gsub(" and ", " ", input)
