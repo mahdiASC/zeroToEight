@@ -1,10 +1,10 @@
 ##################
 ###Loading Data###
 ##################
-rawData <- read.csv("data/rawData.csv")
+rawData <- read.csv("data/rawData.csv",stringsAsFactors = FALSE)
 #Columns to keep: 1,6,9,21-24,31-33,35,37,38,39 (needs cleaning/normalization!), 40-47,49 (with cleaning), 51-56, 79, 90(cohort), 91(starting CS), 92(ending CS), 93(website score), 94(project), 100(teachers tech/nontech),101(students tech/nontech)
-keeps<-c(1,6,9,21:24,31:33,35,37,38,39, 40:47,49, 51:56, 79, 90, 91, 92, 93, 94, 100,101)
-myColNames<-c('name','applicationTotalScore','cohort','address1','address2','zipcode','DoB','Paddress1','Paddress2','Pzipcode','year','school','Pub/Priv','GPA','GPAScale','reducedLunch','financialAide','race','CSExp','CSatSchool','takenCSAPCourse','otherCourses','skills','Q1','Q2','Q3','Q4','Q5','Qscore','ReadScore','cohortCheck','startCS','endCS','websiteScore','projectName','teacherTech','studentTech')
+keeps<-c(1,6,9,21:24,31:33,35,37,38,39, 40:47,49, 51:56, 79, 87, 90, 91, 92, 93, 94, 100,101)
+myColNames<-c('name','applicationTotalScore','cohort','address1','address2','zipcode','DoB','Paddress1','Paddress2','Pzipcode','year','school','Pub/Priv','GPA','GPAScale','reducedLunch','financialAide','race','CSExp','CSatSchool','takenCSAPCourse','otherCourses','skills','Q1','Q2','Q3','Q4','Q5','Qscore','ReadScore','0 to 8','cohortCheck','startCS','endCS','websiteScore','projectName','teacherTech','studentTech')
 keepData <- rawData[,keeps]
 colnames(keepData)<-myColNames
 
@@ -71,12 +71,38 @@ convertDate<-function(input){
 keepData$DoB<-sapply(keepData$DoB,convertDate)
 
 #Standardize GPAs (pretty much impossible)
+testDF<-keepData[,14:15]
+#Taric Lyazghi missing GPA!!!
+testDF[74,1]<-NA
+testDF[,1]<-as.character(testDF[,1])
+
+#Wrong Scale
+testDF[c(34,50),2]<-"0 - 100%"
+testDF[c(29),2]<-"0.0 - 4.0"
 
 cleanNums<-function(input){
-  
+  #Input is a dataset of two columns, the first being grades and 2nd being scales
+  uniqScales<-unique(input[,2])
+  growingOutput<-list()
+  for (i in 1:length(input[,1])){
+    input[i,1]<-sub("~","",sub("%", "", input[i,1]))
+    if (input[i,2]==uniqScales[1]){
+      #100 scale
+      growingOutput<-c(growingOutput, round(as.numeric(input[i,1])/100,2))
+    }else if(input[i,2]==uniqScales[2]){
+      #4 scale
+      growingOutput<-c(growingOutput, round(as.numeric(input[i,1])/4,2))
+    }else if(input[i,2]==uniqScales[3]){
+      #5 scale
+      growingOutput<-c(growingOutput, round(as.numeric(input[i,1])/5,2))
+    }
+  }
+  return (growingOutput)
 }
 
-x<-sapply(keepData$GPA,cleanNums)
+keepData$scaledGPA<-unlist(cleanNums(testDF))
+
+#x<-sapply(keepData$GPA,cleanNums)
 #Standardizing Race
 convertRace<-function(input){
   input<-gsub(" and ", " ", input)
@@ -92,3 +118,29 @@ keepData$race<-sapply(keepData$race, convertRace)
 con <- file("ProperSchools.txt", "r")
 keepData$school<-readLines(con)
 close(con)
+
+#Introducing proper NAs
+
+correctNAs<-function(input){
+  if(input == "" || input == "N/A" || is.na(input)){
+    return (NA)
+  }else{
+    #Also correcting tech and non-tech
+    if(input=='Tech'){
+      return (input)
+    }else if(input == 'Non-Tech' || input == 'Neutral'){
+      return ("Non-Tech")
+    }else{
+      return (as.numeric(input))  
+    }
+    
+  }
+}
+
+keepData$startCS<-sapply(keepData$startCS, correctNAs)
+keepData$endCS<-sapply(keepData$endCS, correctNAs)
+keepData$websiteScore<-sapply(keepData$websiteScore, correctNAs)
+keepData$teacherTech<-sapply(keepData$teacherTech, correctNAs)
+keepData$studentTech<-sapply(keepData$studentTech, correctNAs)
+
+cleanData<-keepData[,-c(14,15,23)]
