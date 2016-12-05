@@ -4,7 +4,7 @@
 rawData <- read.csv("data/rawData.csv",stringsAsFactors = FALSE)
 #Columns to keep: 1,6,9,21-24,31-33,35,37,38,39 (needs cleaning/normalization!), 40-47,49 (with cleaning), 51-56, 79, 90(cohort), 91(starting CS), 92(ending CS), 93(website score), 94(project), 100(teachers tech/nontech),101(students tech/nontech)
 keeps<-c(1,6,9,21:24,31:33,35,37,38,39, 40:47,49, 51:56, 79, 87, 90, 91, 92, 93, 94, 100,101)
-myColNames<-c('name','applicationTotalScore','cohort','address1','address2','zipcode','DoB','Paddress1','Paddress2','Pzipcode','year','school','Pub/Priv','GPA','GPAScale','reducedLunch','financialAide','race','CSExp','CSatSchool','takenCSAPCourse','otherCourses','skills','Q1','Q2','Q3','Q4','Q5','Qscore','ReadScore','0 to 8','cohortCheck','startCS','endCS','websiteScore','projectName','teacherTech','studentTech')
+myColNames<-c('name','applicationTotalScore','cohort','address1','address2','zipcode','DoB','Paddress1','Paddress2','Pzipcode','year','school','Pub_Priv','GPA','GPAScale','reducedLunch','financialAide','race','CSExp','CSatSchool','takenCSAPCourse','otherCourses','skills','Q1','Q2','Q3','Q4','Q5','Qscore','ReadScore','zerotoeight','cohortCheck','startCS','endCS','websiteScore','projectName','teacherTech','studentTech')
 keepData <- rawData[,keeps]
 colnames(keepData)<-myColNames
 
@@ -135,7 +135,7 @@ correctNAs<-function(input){
     }
     
   }
-}
+} 
 
 keepData$startCS<-sapply(keepData$startCS, correctNAs)
 keepData$endCS<-sapply(keepData$endCS, correctNAs)
@@ -143,4 +143,42 @@ keepData$websiteScore<-sapply(keepData$websiteScore, correctNAs)
 keepData$teacherTech<-sapply(keepData$teacherTech, correctNAs)
 keepData$studentTech<-sapply(keepData$studentTech, correctNAs)
 
+#Correcting zerotoeight flag
+correctFlag<-function(input){
+  if (input==""){
+    return ("unchecked")
+  }else{
+    return (input)
+  }
+}
+keepData$zerotoeight<-sapply(keepData$zerotoeight, correctFlag)
+
 cleanData<-keepData[,-c(14,15,23)]
+
+#Splitting into Categorical and Numeric datasets
+catData<-cleanData[,c(3:6,8:15,17:25,28)]
+numData<-cleanData[,c(2,26:28,30:32,36)]
+
+rm(cleanData,keepData, testDF)
+gc()
+#################
+##DATA ANALYSIS##
+#################
+
+#HOW TO HANDLE DIFFERENT DATA
+#Dependent Variable   Categorical   Continuous
+#Independent Variable
+#Categorical          Chi Square     t-test, ANOVA
+#Continuous           LDA, QDA       Regression
+
+#Independent variables = scaledGPA, Q1:Q5, Qscore, ReadScore, cohort, school, Pub_Priv, applicationTotalScore, startCS
+#Dependent Variables = zerotoeight
+
+#http://www.r-tutor.com/elementary-statistics/goodness-fit/chi-squared-test-independence
+#https://www.r-bloggers.com/computing-and-visualizing-lda-in-r/
+
+#chisq.test(table(dependent, independent))
+
+#http://little-book-of-r-for-multivariate-analysis.readthedocs.io/en/latest/src/multivariateanalysis.html
+
+#lda(group ~ numericIndependents + nextNumericIndependent)
