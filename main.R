@@ -187,6 +187,19 @@ gc()
 ################
 ##NUMERIC DATA##
 ################
+
+myNAs<-apply(numData,2,function(x){
+  return (sum(is.na(x))/length(x))
+})
+
+data.frame(sort(myNAs,decreasing=TRUE))
+#will trying omitting variables with too many NAs as they interfere with the PCA
+#will also try imputing the data (using average)
+#If too much of a difference will revisit
+
+#websiteScore has too much missing data
+numData<-numData[,-6]
+
 mosthighlycorrelated <- function(mydataframe,numtoreport)
 {
   # find the correlations
@@ -204,29 +217,31 @@ mosthighlycorrelated <- function(mydataframe,numtoreport)
 }
 
 mosthighlycorrelated(numData[,-4],10)
-#applicationTotalScore and Readscore or highly correlated
+#applicationTotalScore and Readscore or highly correlated, therefore shouldn't use covariates and will only try keeping 1
+
+#data w/out applicationTotalScore
+NUMnoAppScoreData<-numData[,-c(1,4)]
+
+#data w/out ReadScore
+NUMnoReadScore<-numData[,-c(3,4)]
 
 #Standardizing the data. Can also scale in pca function
-standNumData <- as.data.frame(scale(numData[,-4]))
-sapply(standNumData, sd, na.rm=TRUE) #SD the same for all variable, therefore, comparable for PCA
+#standNumData <- as.data.frame(scale(numData[,-4]))
+#sapply(standNumData, sd, na.rm=TRUE) #SD the same for all variable, therefore, comparable for PCA
 
-myNAs<-apply(standNumData,2,function(x){
-  return (sum(is.na(x))/length(x))
-})
-
-data.frame(sort(myNAs,decreasing=TRUE))
-#will trying omitting variables with too many NAs as they interfere with the PCA
-#will also try imputing the data (using average)
-#If too much of a difference will revisit
-
-#websiteScore has too much missing data
-standNumData<-standNumData[,-6]
 
 #PCA without NAs
-pca.NAs<-prcomp(na.omit(standNumData))
+pcaNoApp.NAs<-prcomp(na.omit(NUMnoAppScoreData), retx=TRUE, center=TRUE, scale=TRUE)
+pcaNoRead.NAs<-prcomp(na.omit(NUMnoReadScore), retx=TRUE, center=TRUE, scale=TRUE) #Smaller stn dev.
 
 #PCA with/imputed NAs
-pca.imputed<-prcomp(complete(mice(standNumData, printFlag = FALSE)))
-
+library(mice)
+#Responds much better to additive effects on Variance in the data (First two components account for over 80% of the variance in the data)
+pcaNoApp.imputed<-prcomp(complete(mice(NUMnoAppScoreData, printFlag = FALSE)))#More std. dev. than without NAs
+pcaNoRead.imputed<-prcomp(complete(mice(NUMnoReadScore, printFlag = FALSE)))#More std. dev. than without NAs 
 #http://stats.stackexchange.com/questions/72839/how-to-use-r-prcomp-results-for-prediction
+
+#Best accounting for variation in data w/Cumulative Proportion
+summary(pcaNoApp.imputed)
+
 
