@@ -161,8 +161,9 @@ numData<-cleanData[,c(2,26:28,30:32,36)]
 
 rm(cleanData,keepData, testDF)
 gc()
+
 #################
-##DATA ANALYSIS##
+##EXPLORATORY ANALYSIS##
 #################
 
 #HOW TO HANDLE DIFFERENT DATA
@@ -182,3 +183,50 @@ gc()
 #http://little-book-of-r-for-multivariate-analysis.readthedocs.io/en/latest/src/multivariateanalysis.html
 
 #lda(group ~ numericIndependents + nextNumericIndependent)
+
+################
+##NUMERIC DATA##
+################
+mosthighlycorrelated <- function(mydataframe,numtoreport)
+{
+  # find the correlations
+  cormatrix <- cor(mydataframe)
+  # set the correlations on the diagonal or lower triangle to zero,
+  # so they will not be reported as the highest ones:
+  diag(cormatrix) <- 0
+  cormatrix[lower.tri(cormatrix)] <- 0
+  # flatten the matrix into a dataframe for easy sorting
+  fm <- as.data.frame(as.table(cormatrix))
+  # assign human-friendly names
+  names(fm) <- c("First.Variable", "Second.Variable","Correlation")
+  # sort and print the top n correlations
+  head(fm[order(abs(fm$Correlation),decreasing=T),],n=numtoreport)
+}
+
+mosthighlycorrelated(numData[,-4],10)
+#applicationTotalScore and Readscore or highly correlated
+
+#Standardizing the data. Can also scale in pca function
+standNumData <- as.data.frame(scale(numData[,-4]))
+sapply(standNumData, sd, na.rm=TRUE) #SD the same for all variable, therefore, comparable for PCA
+
+myNAs<-apply(standNumData,2,function(x){
+  return (sum(is.na(x))/length(x))
+})
+
+data.frame(sort(myNAs,decreasing=TRUE))
+#will trying omitting variables with too many NAs as they interfere with the PCA
+#will also try imputing the data (using average)
+#If too much of a difference will revisit
+
+#websiteScore has too much missing data
+standNumData<-standNumData[,-6]
+
+#PCA without NAs
+pca.NAs<-prcomp(na.omit(standNumData))
+
+#PCA with/imputed NAs
+pca.imputed<-prcomp(complete(mice(standNumData, printFlag = FALSE)))
+
+#http://stats.stackexchange.com/questions/72839/how-to-use-r-prcomp-results-for-prediction
+
