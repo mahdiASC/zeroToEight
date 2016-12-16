@@ -265,15 +265,23 @@ library(MASS)
 finalNumData<-preProcess(almostNumData, c("BoxCox", "center", "scale"))
 finalNumData<-data.frame(predict(finalNumData, almostNumData), stringsAsFactors = FALSE)
 
-myLDA<-lda(zerotoeight~., data = finalNumData)
+myLDA<-lda(zerotoeight~ReadScore*scaledGPA, data = finalNumData)
 myPrediction<-predict(myLDA)
 
-table(finalNumData$zerotoeight, myPrediction$class)
-#Low sensitivity
-#high selectivity (just labels almost everyone as unchecked!)
+#Best prediction
+#mean(predict(lda(zerotoeight~ReadScore*scaledGPA, data = finalNumData))$class==finalNumData$zerotoeight)
 
+
+table(finalNumData$zerotoeight, myPrediction$class)
+ #Low sensitivity
+#high selectivity (just labels almost everyone as unchecked!)
+#            checked  unchecked
+#checked         3        16
+#unchecked       1        60
+
+mean(myPrediction$class==finalNumData$zerotoeight)
 #Acc
-#62/80 = 77.5%
+#63/80 = 78.75%
 
 #High QScore
 by(finalNumData$Qscore, finalNumData$zerotoeight, FUN=mean)
@@ -297,7 +305,7 @@ prop.lda = myLDA$svd^2/sum(myLDA$svd^2)
 
 dataset = data.frame(cats = finalNumData$zerotoeight, pca = pcaNoApp.imputed$x, lda = myPrediction$x)
 p1 <- ggplot(dataset) + geom_point(aes(LD1, c(0), size=LD1, colour = cats, shape="circle")) + facet_grid(cats ~ .)
-p2 <- ggplot(dataset) + geom_point(aes(pca.PC3, pca.PC4, size=pca.PC1, colour = cats, shape = "circle"))
+p2 <- ggplot(dataset) + geom_point(aes(pca.PC1, pca.PC2, size=pca.PC1, colour = cats, shape = "circle"))
 
 print(p2) #PCA - Good at reducing variables to most necessary
 print(p1) #LDA - Good at finding seperatability between groups
@@ -391,18 +399,51 @@ alphaCatData<-as.data.frame(apply(alphaCatData, 2, factor))
 myGLM<-glm(zerotoeight~otherCourses+CSatSchool, data=alphaCatData, family = "binomial")
 
 myPred<-predict(myGLM, type = "response") #give predictions of what
-predMax<-as.numeric(names(table(myPred)[4]))
 
-convertCat <- function(x){
-  if (x>=predMax){
+convertCat <- function(x, myMax=.75){
+  if (x>=myMax){
     return ("checked")
   }else{
     return ("unchecked")
   }
 }
 
-test<-sapply(myPred, convertCat)
-table(alphaCatData$zerotoeight, test)
+getAcc <- function(input){
+  output<-(input[1]+input[4])/80
+  if(is.na(output)){
+    return (0)
+  }else{
+    return (output) 
+  }
+}
+
+growingList<-list()
+optimize<-function(){
+  output<-0
+  bestAcc<-0
+  sto<-0
+  while(sto!=100){
+    newPred<-predict(myGLM, type = "response")
+    newPred<-sapply(newPred,function(x){
+      convertNewCat(x, newMax= sto*.01)
+    })
+    Acc<-getAcc(table(alphaCatData$zerotoeight, newPred))
+    growingList<<-c(growingList,Acc)
+    if (Acc>bestAcc){
+      bestAcc<-Acc
+      output<-sto*.01
+    }
+    sto<-sto+1
+  }
+  return (output)
+}
+
+plot(unlist(growingList))
+#@best acc(57.5%) uses cut-off of .89 as optimal prob.
+table(alphaCatData$zerotoeight, sapply(predict(myGLM, type = "response"), function(x){
+  convertNewCat(x, .89)
+}))
+
 #Acc
 #46/80 = 57.5%
 
@@ -427,6 +468,114 @@ cleanData$Q5<-sapply(cleanData$Q5, correctQ5)
 
 #Imputting only numbers
 cleanImput<-complete(mice(cleanData, printFlag = FALSE))
-test<-cleanImput[,-c(1,3:10,16,29,30,32:35)]
+cleanImput<-cleanImput[,-c(1,3:10,16,29,30,32:35)]
 
-x<-glm(zerotoeight~ReadScore+Qscore+otherCourses+CSatSchool, data= test, family = binomial(link = "logit"))
+#Only works with factors
+for (i in 1:dim(cleanImput)[2]){
+  cleanImput[,i]<-factor(cleanImput[,i])
+}
+
+for (i in c(1,16,17,20)){
+  cleanImput[,i]<-as.numeric(cleanImput[,i])
+}
+
+#Add -1 to see all intercepts directly (meh)
+#http://stats.stackexchange.com/questions/60817/significance-of-categorical-predictor-in-logistic-regression
+
+#Best info
+newGLM<-glm(zerotoeight~ReadScore+CSatSchool, data= cleanImput, family = binomial(link = "logit"))
+#ReadScore and SCatSchool v. important
+summary(newGLM)
+
+newPred<-predict(newGLM, type = "response")
+
+convertNewCat <- function(x, newMax=.75){
+  if (x>=newMax){
+    return ("checked")
+  }else{
+    return ("unchecked")
+  }
+}
+
+#newPred<-sapply(newPred, convertNewCat)
+
+# table(alphaCatData$zerotoeight, newPred)
+
+getAcc <- function(input){
+  output<-(input[1]+input[4])/80
+  if(is.na(output)){
+    return (0)
+  }else{
+    return (output) 
+  }
+}
+
+growingList<-list()
+optimize<-function(){
+  output<-0
+  bestAcc<-0
+  sto<-0
+  while(sto!=100){
+    newPred<-predict(newGLM, type = "response")
+    newPred<-sapply(newPred,function(x){
+      convertNewCat(x, newMax= sto*.01)
+    })
+    Acc<-getAcc(table(alphaCatData$zerotoeight, newPred))
+    growingList<<-c(growingList,Acc)
+    if (Acc>bestAcc){
+      bestAcc<-Acc
+      output<-sto*.01
+    }
+    sto<-sto+1
+  }
+  return (output)
+}
+
+plot(unlist(growingList))
+#@best acc(57.5%) uses cut-off of .88 as optimal prob.
+table(alphaCatData$zerotoeight, sapply(predict(newGLM, type = "response"), function(x){
+  convertNewCat(x, .88)
+}))
+
+############
+##Boosting##
+############
+#Last ditch effort
+library(mboost)
+
+boostGLM<-glmboost(zerotoeight~ReadScore+CSatSchool+Qscore, data= cleanImput, family = Binomial(link = c("logit")))
+
+######
+growingList<-list()
+optimize<-function(){
+  output<-0
+  bestAcc<-0
+  sto<-0
+  while(sto!=100){
+    newPred<-predict(boostGLM, type = "response")
+    newPred<-sapply(newPred,function(x){
+      convertNewCat(x, newMax= sto*.01)
+    })
+    Acc<-getAcc(table(alphaCatData$zerotoeight, newPred))
+    growingList<<-c(growingList,Acc)
+    if (Acc>bestAcc){
+      bestAcc<-Acc
+      output<-sto*.01
+    }
+    sto<-sto+1
+  }
+  return (output)
+}
+val<-optimize()
+table(alphaCatData$zerotoeight, sapply(predict(boostGLM, type = "response"), function(x){
+  convertNewCat(x, val)
+}))
+plot(unlist(growingList))
+
+#62/80=77.5%
+#######
+
+#Make presentation about important variants
+#     Make simple graphs about the variants
+#     Discuss and show briefly about the predictive models
+
