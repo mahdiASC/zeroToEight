@@ -82,19 +82,18 @@ testDF[c(29),2]<-"0.0 - 4.0"
 
 cleanNums<-function(input){
   #Input is a dataset of two columns, the first being grades and 2nd being scales
-  uniqScales<-unique(input[,2])
   growingOutput<-list()
-  for (i in 1:length(input[,1])){
-    input[i,1]<-sub("~","",sub("%", "", input[i,1]))
-    if (input[i,2]==uniqScales[1]){
+  for (i in 1:length(input$GPA)){
+    input$GPA[i]<-sub("~","",sub("%", "", input$GPA[i]))
+    if (input$GPAScale[i]=="0 - 100%"){
       #100 scale
-      growingOutput<-c(growingOutput, round(as.numeric(input[i,1])/100,2))
-    }else if(input[i,2]==uniqScales[2]){
+      growingOutput<-c(growingOutput, round(as.numeric(input$GPA[i])/100,2))
+    }else if(input$GPAScale[i]=="0.0 - 4.0"){
       #4 scale
-      growingOutput<-c(growingOutput, round(as.numeric(input[i,1])/4,2))
-    }else if(input[i,2]==uniqScales[3]){
+      growingOutput<-c(growingOutput, round(as.numeric(input$GPA[i])/4,2))
+    }else if(input$GPAScale[i]=="0.0 - 5.0"){
       #5 scale
-      growingOutput<-c(growingOutput, round(as.numeric(input[i,1])/5,2))
+      growingOutput<-c(growingOutput, round(as.numeric(input$GPA[i])/5,2))
     }
   }
   return (growingOutput)
@@ -271,9 +270,8 @@ myPrediction<-predict(myLDA)
 #Best prediction
 #mean(predict(lda(zerotoeight~ReadScore*scaledGPA, data = finalNumData))$class==finalNumData$zerotoeight)
 
-
 table(finalNumData$zerotoeight, myPrediction$class)
- #Low sensitivity
+#Low sensitivity
 #high selectivity (just labels almost everyone as unchecked!)
 #            checked  unchecked
 #checked         3        16
@@ -472,7 +470,9 @@ cleanImput<-cleanImput[,-c(1,3:10,16,29,30,32:35)]
 
 #Only works with factors
 for (i in 1:dim(cleanImput)[2]){
-  cleanImput[,i]<-factor(cleanImput[,i])
+  if(!(i%in%c(1,16,17,20))){
+    cleanImput[,i]<-factor(cleanImput[,i])  
+  }
 }
 
 for (i in c(1,16,17,20)){
@@ -572,10 +572,63 @@ table(alphaCatData$zerotoeight, sapply(predict(boostGLM, type = "response"), fun
 }))
 plot(unlist(growingList))
 
-#62/80=77.5%
+#61/80=76.25%
 #######
 
-#Make presentation about important variants
-#     Make simple graphs about the variants
-#     Discuss and show briefly about the predictive models
+###################
+##Testing Dataset##
+###################
 
+testingRaw<-read.csv('sec.csv', stringsAsFactors = FALSE)
+
+#Cleaning
+testingRaw<-testingRaw[,5:10]
+colnames(testingRaw)<-c("ReadScore","name","GPA","GPAScale","CSatSchool","Qscore")
+
+#Correcting GPA
+testingRaw$GPA[21]=3.5
+testingRaw$GPA[64]=4.0
+#Taric Lyazghi and Malaak Hoppie not having GPA
+testingRaw<-testingRaw[-c(122,166),]
+testingRaw$GPA<-as.numeric(gsub("%","",testingRaw$GPA))
+
+testingRaw$GPAScale[c(36,41,53,72,74,96,105,111,133,174)]="0 - 100%"
+testingRaw$GPAScale[c(1,64,68)]="0.0 - 4.0"
+
+
+testingRaw$scaledGPA<-unlist(cleanNums(testingRaw))
+testingRaw$CSatSchool<-factor(testingRaw$CSatSchool)
+
+#Scaling all data
+for (i in c(1,6,7)){
+  testingRaw[,i]<-as.numeric(testingRaw[,i])
+}
+
+#Only works with factors
+for (i in 1:dim(testingRaw)[2]){
+  if(!(i%in%c(1,6,7))){
+    testingRaw[,i]<-factor(testingRaw[,i])  
+  }
+}
+
+#Boosted GLM
+x<-sapply(predict(boostGLM, newdata = testingRaw,type = "response"), function(x){
+  convertNewCat(x, val)
+})
+
+#Get these students! (that qualify)
+#4 "missed", but likely more ()
+BGLM.missed<-as.vector(testingRaw$name[which(x=="checked")])
+
+#LDA
+testing<-predict(preProcess(almostNumData, c("BoxCox", "center", "scale")), testingRaw)
+y<-predict(myLDA, newdata = testing)
+sum(y$class=="checked")
+
+#Get these students! (that qualify)
+#38 "missed"
+LDA.missed<-testing$name[y$class=="checked"]
+
+missed<-c(BGLM.missed, LDA.missed)
+
+which(cleanData$name%in%missed)
